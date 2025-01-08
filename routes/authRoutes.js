@@ -63,7 +63,10 @@ router.post('/login', async (req, res) => {
             const { password, ...others } = user._doc;
 
             res.cookie("access_token", token, {
-              httpOnly: true
+              
+              httpOnly: true,
+              secure: true,       // Required for development without HTTPS
+              sameSite: 'None', 
             }).status(200).json(others);
 
         

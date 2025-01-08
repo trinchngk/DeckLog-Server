@@ -33,6 +33,9 @@ router.get('/cloudinary-signature', auth, (req, res) => {
 
 function auth(req, res, next) {
   const token = req.cookies.access_token;
+  console.log(req.cookies)
+  console.log("this is your token: ", token);
+  
   if (!token) return res.status(401).json({ error: 'Access denied' });
 
   try {
