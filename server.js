@@ -23,6 +23,7 @@ app.use(express.json());
 //Allow all origins
 // app.use(cors());
 
+
 app.use(
   cors({
     origin: process.env.CLIENT_ORIGIN, // Frontend origin
