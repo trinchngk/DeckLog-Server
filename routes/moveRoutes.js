@@ -7,7 +7,7 @@ import ffmpeg from 'fluent-ffmpeg'
 import dotenv from 'dotenv';
 dotenv.config();
 
-const router = express.Router();
+const router = express.Router(); 
 
 cloudinary.v2.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -35,7 +35,7 @@ function auth(req, res, next) {
   const token = req.cookies.access_token;
   console.log(req.cookies)
   console.log("this is your token: ", token);
-  
+
   if (!token) return res.status(401).json({ error: 'Access denied' });
 
   try {
