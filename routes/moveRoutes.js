@@ -18,10 +18,17 @@ cloudinary.v2.config({
 
 router.get('/cloudinary-signature', auth, (req, res) => {
   const timestamp = Math.floor(Date.now() / 1000);
+
+  // const eagerAsync = req.query.eager_async === 'true';
+
   const paramsToSign = {
     timestamp: timestamp,
     upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET,
   };
+
+  // if (eagerAsync) {
+  //   paramsToSign.eager_async = 'true';
+  // }
 
   const signature = cloudinary.v2.utils.api_sign_request(
     paramsToSign,
@@ -33,8 +40,6 @@ router.get('/cloudinary-signature', auth, (req, res) => {
 
 function auth(req, res, next) {
   const token = req.cookies.access_token;
-  console.log(req.cookies)
-  console.log("this is your token: ", token);
 
   if (!token) return res.status(401).json({ error: 'Access denied' });
 
@@ -47,73 +52,43 @@ function auth(req, res, next) {
   }
 };
 
-const compressVideo = (inputPath, outputPath, res) => {
-  ffmpeg(inputPath)
-    .output(path.join(__dirname, 'uploads', outputPath))
-    .videoCodec('libx264')
-    .size('50%')
-    .on('end', () => {
-      console.log('Compression completed!');
-      res.send('Video uploaded and compressed successfully!');
-    })
-    .on('error', (err) => {
-      console.error('Compression failed:', err);
-      res.status(500).send('Compression failed.');
-    })
-    .run();
-};
+// const storage = multer.memoryStorage();
+// const upload = multer({ storage });
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
+//   // Wrap upload_stream in a Promise
+// const uploadToCloudinary = (fileBuffer) =>
+//   new Promise((resolve, reject) => {
+//     const uploadStream = cloudinary.v2.uploader.upload_stream(
+//       {
+//         folder: 'moves/videos',
+//         resource_type: 'video',
+//       },
+//       (error, result) => {
+//         if (error) return reject(error);
+//         resolve(result);
+//       }
+//     );
 
-  // Wrap upload_stream in a Promise
-const uploadToCloudinary = (fileBuffer) =>
-  new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.v2.uploader.upload_stream(
-      {
-        folder: 'moves/videos',
-        resource_type: 'video',
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      }
-    );
+//   // Pipe the file buffer to the upload stream
+//   uploadStream.end(fileBuffer);
+// });
 
-  // Pipe the file buffer to the upload stream
-  uploadStream.end(fileBuffer);
-});
-
-router.post('/', auth, upload.single('clip'), async (req, res) => {
+router.post('/', auth, async (req, res) => {
   try {
     // Validate required fields
-    const { name, desc, tags, finished } = req.body;
-    if (!name || !desc || !tags || !finished) {
+    const { name, desc, tags, status, clips} = req.body;
+    if (!name || !desc || !tags || !status, !clips) {
       return res.status(400).send('Request body is missing required fields');
     }
-
-    if (!req.file) {
-      console.log("here");
-      return res.status(400).send('No file uploaded');
-    }
-
-    // Upload the file
-    const cloudRes = await uploadToCloudinary(req.file.buffer);
 
     // Create a new move with the uploaded video details
     const newMove = {
       userId: req.user.id,
       name,
       desc,
-      clips: [
-        {
-          clipUrl: cloudRes.secure_url, // Secure URL of the uploaded video
-          clipId: cloudRes.public_id,   // Public ID of the uploaded video
-          desc: '',                     // Optional description field
-        },
-      ],
+      clips,
       tags: tags.split(','), // Convert comma-separated tags to an array
-      finished: finished === 'true', // Convert string to boolean
+      status,
     };
 
     const move = await Move.create(newMove);
@@ -190,39 +165,23 @@ router.get('/:id', auth, async (req, res) => {
 
 //route for updating a move
 //app.put() is used to update a resource
-router.put('/:id', auth, upload.single('clip'), async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   try {
-    const { name, desc, tags, finished } = req.body;
-    if (!name || !desc || !tags || !finished) {
+    const { name, desc, tags, status, clips} = req.body;
+
+    if (!name || !desc || !tags || !status, !clips) {
       return res.status(400).send('Request body is missing required fields');
     }
 
     const move = await Move.findById(req.params.id)
-    const cloudRes = await uploadToCloudinary(req.file.buffer);
 
-    let clips = []
-
-    if (req.file) {
-      clips = 
-        [...move.clips,
-          {
-            clipUrl: cloudRes.secure_url, // Secure URL of the uploaded video
-            clipId: cloudRes.public_id,   // Public ID of the uploaded video
-            desc: '',                     // Optional description field
-          },         
-        ]
-    } else {
-      clips = move.clips;
-    }
-
-    
     const updatedMove = {
       userId: req.user.id,
-      name: name,
-      desc: desc,
-      clips: clips,
+      name,
+      desc,
+      clips,
       tags: tags.split(','), // Convert comma-separated tags to an array
-      finished: finished === 'true', // Convert string to boolean
+      status, // Convert string to boolean
     };
 
     if (!move) {
@@ -248,11 +207,9 @@ router.delete('/:id', auth, async (req, res) => {
     if (move.clips[0]) {
 
       const clipIds = move.clips.map((clip) => clip.clipId);
-      console.log(clipIds);
       await cloudinary.v2.api
       .delete_resources(clipIds, 
-        { type: 'upload', resource_type: 'video' })
-      .then(console.log);
+        { type: 'upload', resource_type: 'video' });
     }
 
     if (!move) {
@@ -263,6 +220,27 @@ router.delete('/:id', auth, async (req, res) => {
       const result = await Move.findByIdAndDelete(req.params.id, req.body);
       return res.status(200).send({ message: 'Move deleted successfully' });      
     }
+    
+  } catch (error) {
+    console.log(error.message);
+    return res.status(500).send({ message: error.message });
+  }
+});
+
+
+//route for deleting cloudinary clips
+router.delete('/cloudinary/delete-clips', auth, async (req, res) => {
+  try {
+    const { clips } = req.body;
+
+    if (!clips) {
+      return res.status(404).json({ message: 'clips not found' });
+    } 
+
+    const clipIds = clips.map((clip) => clip.clipId);
+    await cloudinary.v2.api
+    .delete_resources(clipIds, 
+      { type: 'upload', resource_type: 'video' });
     
   } catch (error) {
     console.log(error.message);

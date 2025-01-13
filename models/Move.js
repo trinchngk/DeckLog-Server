@@ -34,10 +34,6 @@ const MoveSchema = mongoose.Schema(
       type: String,
       default: ""
     },
-    imgUrl: {
-      type: String,
-      default: ""
-    },
     clips: {
       type: [ClipSchema],
       default: []
@@ -52,8 +48,8 @@ const MoveSchema = mongoose.Schema(
         return this.createdAt;
       }
     },
-    finished: {
-      type: Boolean,
+    status: {
+      type: String,
       required: true
     }
   },
