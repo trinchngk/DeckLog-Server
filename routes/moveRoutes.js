@@ -3,8 +3,8 @@ import { Move } from '../models/Move.js';
 import jwt from 'jsonwebtoken';
 import cloudinary from 'cloudinary';
 import multer from 'multer';
-import ffmpeg from 'fluent-ffmpeg'
 import dotenv from 'dotenv';
+
 dotenv.config();
 
 const router = express.Router(); 
@@ -19,16 +19,10 @@ cloudinary.v2.config({
 router.get('/cloudinary-signature', auth, (req, res) => {
   const timestamp = Math.floor(Date.now() / 1000);
 
-  // const eagerAsync = req.query.eager_async === 'true';
-
   const paramsToSign = {
     timestamp: timestamp,
     upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET,
   };
-
-  // if (eagerAsync) {
-  //   paramsToSign.eager_async = 'true';
-  // }
 
   const signature = cloudinary.v2.utils.api_sign_request(
     paramsToSign,
@@ -52,26 +46,44 @@ function auth(req, res, next) {
   }
 };
 
-// const storage = multer.memoryStorage();
-// const upload = multer({ storage });
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
-//   // Wrap upload_stream in a Promise
-// const uploadToCloudinary = (fileBuffer) =>
-//   new Promise((resolve, reject) => {
-//     const uploadStream = cloudinary.v2.uploader.upload_stream(
-//       {
-//         folder: 'moves/videos',
-//         resource_type: 'video',
-//       },
-//       (error, result) => {
-//         if (error) return reject(error);
-//         resolve(result);
-//       }
-//     );
+  // Wrap upload_stream in a Promise
+const uploadToCloudinary = (fileBuffer) =>
+  new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.v2.uploader.upload_stream(
+      {
+        folder: 'moves/videos',
+        resource_type: 'video',
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
 
-//   // Pipe the file buffer to the upload stream
-//   uploadStream.end(fileBuffer);
-// });
+  // Pipe the file buffer to the upload stream
+  uploadStream.end(fileBuffer);
+});
+
+router.post('/cloudinary/upload', auth, upload.single('clip'), async (req, res) => {
+  try {
+
+    if (!req.file) {
+      console.log("here");
+      return res.status(400).send('No file uploaded');
+    }
+
+    // Upload the file
+    const cloudRes = await uploadToCloudinary(req.file.buffer);
+
+    return res.status(201).send(cloudRes);
+  } catch (error) {
+    console.error('Error uploading clip:', error.message);
+    return res.status(500).send({ message: error.message });
+  }
+});
 
 router.post('/', auth, async (req, res) => {
   try {
