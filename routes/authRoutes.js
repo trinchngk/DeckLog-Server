@@ -5,6 +5,14 @@ import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  path: '/',
+  maxAge: 24 * 60 * 60 * 1000 // 24 hours
+};
+
 router.post('/signup', async (req, res) => {
   try {
     const salt = bcrypt.genSaltSync(10);
@@ -32,58 +40,39 @@ router.post('/signup', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
+
   try {
-    const salt = bcrypt.genSaltSync(10);
-
-
-    if (!req.body.email || !req.body.password ) {
-      return res.status(400).send('req body is missing fields');
-    } else {
-      const user = await User.findOne({ email: req.body.email });
-  
-      // check for existing user
-      if (!user) {
-          return res.status(400).send('User could not be found');
-      } else {
-
-        const correctPassword = await bcrypt.compare(req.body.password, user.password);
-        if (correctPassword) {
-            const token = jwt.sign({
-                id: user._id,
-                email: user.email
-            },
-                process.env.JWT,
-                // { expiresIn: '2h' }
-            );
-
-            // const userResponse = {
-            //     _id: user._id,
-            //     email: user.email,
-            // };
-            const { password, ...others } = user._doc;
-
-            res.cookie("access_token", token, {
-              
-              httpOnly: true,
-              secure: true,       // Required for development without HTTPS
-              sameSite: 'None', 
-            }).status(200).json(others);
-
-        
-            // return response.status(200).json({
-            //     token,
-            //     userResponse
-            // });                       
-        } else {
-            return res.status(400).send('Incorrect password');
-        }
-  
-      }            
+    if (!req.body.email || !req.body.password) {
+      console.log('Missing credentials');
+      return res.status(400).json({ message: 'Missing email or password' });
     }
 
+    const user = await User.findOne({ email: req.body.email });
+
+    if (!user) {
+      return res.status(400).json({ message: 'User not found' });
+    }
+
+    const correctPassword = await bcrypt.compare(req.body.password, user.password);
+
+    if (!correctPassword) {
+      return res.status(400).json({ message: 'Invalid password' });
+    }
+
+    const token = jwt.sign(
+      { id: user._id, email: user.email },
+      process.env.JWT,
+      { expiresIn: '24h' }
+    );
+
+    res.cookie('access_token', token, COOKIE_OPTIONS);
+    
+    const { password, ...userWithoutPassword } = user._doc;
+    return res.status(200).json(userWithoutPassword);
+
   } catch (error) {
-    console.log(error.message);
-    return res.status(500).send({ message: error.message });
+    console.error('Login error:', error);
+    return res.status(500).json({ message: error.message });
   }
 });
 
@@ -121,6 +110,9 @@ router.post('/google', async (req, res, next) => {
       const token = jwt.sign( { id: savedUser._id }, process.env.JWT );
       res.cookie("access_token", token, {
         httpOnly: true,
+        secure: true,       // Required for development without HTTPS
+        sameSite: 'Strict', 
+        path: '/'
       })
       .status(200)
       .json(savedUser._doc);

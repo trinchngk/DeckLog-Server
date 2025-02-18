@@ -29,9 +29,12 @@ app.use(
     origin: process.env.CLIENT_ORIGIN, // Frontend origin
     credentials: true,               // Allow credentials (cookies, HTTP authentication)
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie','Accept'],
+    exposedHeaders: ['Set-Cookie']
   })
 );
+
+app.options('*', cors());
 
 app.get('/', (req, res) => {
   console.log(req);
