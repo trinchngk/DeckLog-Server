@@ -7,8 +7,8 @@ const router = express.Router();
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  secure: true,  // Ensure cookies are only sent over HTTPS
+  sameSite: 'None', // Required for cross-site cookies
   path: '/',
   maxAge: 24 * 60 * 60 * 1000 // 24 hours
 };
